@@ -97,10 +97,26 @@ export function EmployeesPage() {
     loadEmployees(pageIndex);
   }, [pageIndex, departmentId]);
 
-  const openCreate = () => {
+  const generateNextEmployeeCode = (list: EmployeeSummaryDto[]) => {
+    let maxNum = 0;
+    let padLen = 5;
+    for (const e of list) {
+      const match = /^NV(\d+)$/i.exec((e.code || '').trim());
+      if (match) {
+        const num = parseInt(match[1], 10);
+        if (!Number.isNaN(num) && num > maxNum) {
+          maxNum = num;
+          padLen = Math.max(padLen, match[1].length);
+        }
+      }
+    }
+    return `NV${String(maxNum + 1).padStart(padLen, '0')}`;
+  };
+
+  const openCreate = async () => {
     setEditing(null);
     setFormError(null);
-    setFormCode('');
+    setFormCode(generateNextEmployeeCode(items));
     setFormName('');
     setFormBirthDate('');
     setFormSex(true);
@@ -110,6 +126,18 @@ export function EmployeesPage() {
     setFormJoinDate(new Date().toISOString().slice(0, 10));
     setFormNotes('');
     setFormModal(true);
+
+    // Fetch up to 100 employees to compute exact next sequential code across all pages
+    try {
+      const res = await apiClient.get<ApiResponse<PagedResult<EmployeeSummaryDto>>>('/api/employees', {
+        params: { pageIndex: 1, pageSize: 100 },
+      });
+      if (res.data.success && res.data.data?.items?.length) {
+        setFormCode(generateNextEmployeeCode(res.data.data.items));
+      }
+    } catch {
+      // keep initial estimate
+    }
   };
 
   const openEdit = async (emp: EmployeeSummaryDto) => {
@@ -427,16 +455,23 @@ export function EmployeesPage() {
                 </div>
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div>
-                    <label className="mb-1 block text-xs font-semibold text-slate-700">
-                      Mã nhân viên <span className="text-red-500">*</span>
-                    </label>
+                    <div className="mb-1 flex items-center justify-between">
+                      <label className="block text-xs font-semibold text-slate-700">
+                        Mã nhân viên <span className="text-red-500">*</span>
+                      </label>
+                      {!editing && (
+                        <span className="rounded-md bg-blue-50 px-1.5 py-0.5 text-[10px] font-semibold text-blue-700">
+                          Tự động sinh
+                        </span>
+                      )}
+                    </div>
                     <input
                       type="text"
                       maxLength={15}
                       value={formCode}
                       onChange={(e) => setFormCode(e.target.value)}
                       placeholder="VD: NV00300"
-                      className="w-full rounded-xl border border-slate-300 bg-slate-50 px-3.5 py-2.5 text-sm outline-none transition focus:border-blue-600 focus:bg-white focus:ring-4 focus:ring-blue-600/10"
+                      className="w-full rounded-xl border border-slate-300 bg-slate-50 px-3.5 py-2.5 text-sm font-mono outline-none transition focus:border-blue-600 focus:bg-white focus:ring-4 focus:ring-blue-600/10"
                     />
                   </div>
                   <div>
