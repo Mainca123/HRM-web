@@ -1,12 +1,14 @@
 import React, { useEffect, useState } from 'react';
 import { Plus, KeyRound, Edit3, Trash2, Search, X, ShieldCheck, Eye, EyeOff } from 'lucide-react';
 import { apiClient, extractErrorMessage } from '../api/client';
-import { ApiResponse, PagedResult, UserGroupDto, UserSummaryDto } from '../types/api';
+import { ApiResponse, EmployeeSummaryDto, PagedResult, UserGroupDto, UserSummaryDto } from '../types/api';
 import { ConfirmModal } from '../components/ConfirmModal';
 
 export function UsersPage() {
   const [users, setUsers] = useState<UserSummaryDto[]>([]);
   const [groups, setGroups] = useState<UserGroupDto[]>([]);
+  const [employees, setEmployees] = useState<EmployeeSummaryDto[]>([]);
+  const [empFilter, setEmpFilter] = useState('');
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -31,16 +33,21 @@ export function UsersPage() {
   const loadData = async () => {
     setLoading(true);
     try {
-      const [uRes, gRes] = await Promise.all([
+      const [uRes, gRes, eRes] = await Promise.all([
         apiClient.get<ApiResponse<PagedResult<UserSummaryDto>>>('/api/users', {
           params: { pageIndex: 1, pageSize: 100, search: search.trim() || undefined },
         }),
         apiClient.get<ApiResponse<UserGroupDto[]>>('/api/user-groups'),
+        apiClient.get<ApiResponse<PagedResult<EmployeeSummaryDto>>>('/api/employees', {
+          params: { pageIndex: 1, pageSize: 100 },
+        }),
       ]);
-      setUsers(uRes.data.data?.items || []);
+      const userList = uRes.data.data?.items || [];
+      setUsers(userList);
       const grps = gRes.data.data || [];
       setGroups(grps);
       if (grps.length > 0 && !newGroupId) setNewGroupId(grps[0].id);
+      setEmployees(eRes.data.data?.items || []);
     } catch (err) {
       setFeedback({ type: 'err', msg: extractErrorMessage(err, 'Lỗi tải danh sách tài khoản.') });
     } finally {
@@ -303,14 +310,49 @@ export function UsersPage() {
                 </div>
               </div>
               <div>
-                <label className="mb-1 block text-xs font-semibold text-slate-700">Employee ID *</label>
+                <label className="mb-1 block text-xs font-semibold text-slate-700">
+                  Chọn nhân viên liên kết *
+                </label>
                 <input
-                  type="number"
-                  value={newEmpId}
-                  onChange={(e) => setNewEmpId(e.target.value)}
-                  placeholder="VD: 1"
-                  className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"
+                  type="text"
+                  value={empFilter}
+                  onChange={(e) => setEmpFilter(e.target.value)}
+                  placeholder="Lọc nhanh theo tên hoặc mã NV..."
+                  className="mb-1.5 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs outline-none focus:border-blue-600 focus:bg-white"
                 />
+                {(() => {
+                  const usedIds = new Set(users.map((u) => u.employeeId).filter((id): id is number => id != null));
+                  const q = empFilter.trim().toLowerCase();
+                  const available = employees.filter(
+                    (emp) =>
+                      !usedIds.has(emp.id) &&
+                      (!q ||
+                        emp.fullName.toLowerCase().includes(q) ||
+                        (emp.code || '').toLowerCase().includes(q) ||
+                        (emp.departmentName || '').toLowerCase().includes(q))
+                  );
+                  return (
+                    <>
+                      <select
+                        value={newEmpId}
+                        onChange={(e) => setNewEmpId(e.target.value)}
+                        className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-blue-600"
+                      >
+                        <option value="">-- Chọn nhân viên ({available.length} chưa có tài khoản) --</option>
+                        {available.map((emp) => (
+                          <option key={emp.id} value={emp.id}>
+                            {emp.code} - {emp.fullName} ({emp.departmentName || 'Chưa phân phòng'}) [ID: {emp.id}]
+                          </option>
+                        ))}
+                      </select>
+                      {newEmpId && (
+                        <div className="mt-1 text-[11px] font-medium text-blue-700">
+                          Đã chọn Employee ID: #{newEmpId}
+                        </div>
+                      )}
+                    </>
+                  );
+                })()}
               </div>
               <div>
                 <label className="mb-1 block text-xs font-semibold text-slate-700">Nhóm quyền</label>
