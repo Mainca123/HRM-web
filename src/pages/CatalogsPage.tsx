@@ -4,6 +4,11 @@ import { apiClient } from '../api/client';
 import { ApiResponse, DepartmentDto, PositionDto, ShiftDto, UserGroupDto } from '../types/api';
 
 export function CatalogsPage() {
+  const formatShiftTime = (val?: string | null) => {
+    if (!val) return '--:--';
+    const timePart = val.includes('T') ? val.split('T')[1] : val.includes(' ') ? val.split(' ')[1] : val;
+    return timePart.slice(0, 5);
+  };
   const [departments, setDepartments] = useState<DepartmentDto[]>([]);
   const [positions, setPositions] = useState<PositionDto[]>([]);
   const [shifts, setShifts] = useState<ShiftDto[]>([]);
@@ -97,7 +102,7 @@ export function CatalogsPage() {
                   )}
                 </div>
                 <span className="font-mono text-xs font-semibold text-slate-600">
-                  {(s.normalTimeIn || '--:--').slice(0, 5)} → {(s.normalTimeOut || '--:--').slice(0, 5)}
+                  {formatShiftTime(s.normalTimeIn)} → {formatShiftTime(s.normalTimeOut)}
                 </span>
               </div>
             ))}
