@@ -9,11 +9,9 @@ import {
   CalendarOff,
   CheckSquare,
   RefreshCw,
-  ArrowRight,
   TrendingUp,
 } from 'lucide-react';
 import {
-  BarChart,
   Bar,
   XAxis,
   YAxis,
@@ -76,16 +74,6 @@ export function DashboardPage() {
         { name: 'Chưa chấm công / Vắng', value: hrData.absentToday },
       ]
     : [];
-
-  const deptChartData = (hrData?.departmentStats || [])
-    .filter((d) => d.totalEmployees > 0)
-    .slice(0, 12)
-    .map((d) => ({
-      name: d.departmentName,
-      'Tổng nhân sự': d.totalEmployees,
-      'Có mặt': d.presentToday,
-      rate: d.attendanceRate,
-    }));
 
   // Compute 6-month headcount trend from real employee join dates + active headcount
   const headcountTrend = useMemo(() => {
@@ -191,77 +179,87 @@ export function DashboardPage() {
         />
       </div>
 
-      {/* Row 1: Attendance Charts (Polished Bar + Center-KPI Donut) */}
+      {/* Charts Row: Headcount Trend (6 months) + Attendance Donut */}
       <div className="grid gap-6 lg:grid-cols-3">
         <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-xs lg:col-span-2">
-          <div className="mb-5 flex flex-wrap items-center justify-between gap-2">
+          <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
             <div>
-              <h2 className="text-base font-bold text-slate-900">Phân bổ nhân sự &amp; Chuyên cần theo phòng ban</h2>
-              <p className="text-xs text-slate-500">So sánh tổng quân số và số nhân sự đã chấm công hôm nay</p>
-            </div>
-            <Link
-              to="/org-chart"
-              className="inline-flex items-center gap-1 rounded-lg bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-700 transition hover:bg-blue-100"
-            >
-              Sơ đồ nhân sự <ArrowRight className="h-3.5 w-3.5" />
-            </Link>
-          </div>
-          <div className="h-72 w-full">
-            {deptChartData.length > 0 ? (
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart
-                  data={deptChartData}
-                  margin={{ top: 10, right: 16, left: -12, bottom: 8 }}
-                  barGap={8}
-                >
-                  <defs>
-                    <linearGradient id="presentGrad" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor="#2563eb" stopOpacity={1} />
-                      <stop offset="100%" stopColor="#1e40af" stopOpacity={0.9} />
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
-                  <XAxis
-                    dataKey="name"
-                    axisLine={{ stroke: '#e2e8f0' }}
-                    tickLine={false}
-                    tick={{ fontSize: 12, fill: '#475569', fontWeight: 600 }}
-                  />
-                  <YAxis
-                    axisLine={false}
-                    tickLine={false}
-                    tick={{ fontSize: 11, fill: '#94a3b8' }}
-                    allowDecimals={false}
-                  />
-                  <Tooltip
-                    cursor={{ fill: '#f8fafc' }}
-                    contentStyle={{
-                      borderRadius: '12px',
-                      border: '1px solid #e2e8f0',
-                      boxShadow: '0 10px 25px -5px rgba(15, 23, 42, 0.1)',
-                      fontSize: '12px',
-                    }}
-                  />
-                  <Legend wrapperStyle={{ fontSize: 12, paddingTop: 10 }} iconType="circle" />
-                  <Bar
-                    dataKey="Tổng nhân sự"
-                    fill="#cbd5e1"
-                    maxBarSize={42}
-                    radius={[8, 8, 0, 0]}
-                  />
-                  <Bar
-                    dataKey="Có mặt"
-                    fill="url(#presentGrad)"
-                    maxBarSize={42}
-                    radius={[8, 8, 0, 0]}
-                  />
-                </BarChart>
-              </ResponsiveContainer>
-            ) : (
-              <div className="flex h-full items-center justify-center text-sm text-slate-400">
-                {loading ? 'Đang tải biểu đồ...' : 'Chưa có dữ liệu phòng ban'}
+              <div className="flex items-center gap-2">
+                <TrendingUp className="h-5 w-5 text-blue-700" />
+                <h2 className="text-base font-bold text-slate-900">Biểu đồ biến động tăng / giảm nhân sự</h2>
               </div>
-            )}
+              <p className="mt-0.5 text-xs text-slate-500">
+                Theo dõi quy mô tổng nhân sự và số nhân sự gia nhập mới trong 6 tháng gần nhất
+              </p>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="rounded-full bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-700">
+                Quy mô hiện tại: {hrData?.totalActiveEmployees ?? 0} NV
+              </span>
+              <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">
+                Tháng này: +{hrData?.totalNewEmployeesThisMonth ?? 0} mới
+              </span>
+            </div>
+          </div>
+
+          <div className="h-72 w-full">
+            <ResponsiveContainer width="100%" height="100%">
+              <ComposedChart data={headcountTrend} margin={{ top: 10, right: 16, left: -12, bottom: 4 }}>
+                <defs>
+                  <linearGradient id="headcountArea" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#2563eb" stopOpacity={0.25} />
+                    <stop offset="95%" stopColor="#2563eb" stopOpacity={0.02} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
+                <XAxis
+                  dataKey="label"
+                  axisLine={{ stroke: '#e2e8f0' }}
+                  tickLine={false}
+                  tick={{ fontSize: 12, fill: '#475569', fontWeight: 600 }}
+                />
+                <YAxis
+                  yAxisId="left"
+                  axisLine={false}
+                  tickLine={false}
+                  tick={{ fontSize: 11, fill: '#94a3b8' }}
+                  allowDecimals={false}
+                />
+                <YAxis
+                  yAxisId="right"
+                  orientation="right"
+                  axisLine={false}
+                  tickLine={false}
+                  tick={{ fontSize: 11, fill: '#10b981' }}
+                  allowDecimals={false}
+                />
+                <Tooltip
+                  contentStyle={{
+                    borderRadius: '12px',
+                    border: '1px solid #e2e8f0',
+                    boxShadow: '0 10px 25px -5px rgba(15, 23, 42, 0.1)',
+                    fontSize: '12px',
+                  }}
+                />
+                <Legend wrapperStyle={{ fontSize: 12, paddingTop: 10 }} iconType="circle" />
+                <Area
+                  yAxisId="left"
+                  type="monotone"
+                  dataKey="Tổng nhân sự"
+                  stroke="#1d4ed8"
+                  strokeWidth={2.5}
+                  fill="url(#headcountArea)"
+                  activeDot={{ r: 6, fill: '#1d4ed8', stroke: '#ffffff', strokeWidth: 2 }}
+                />
+                <Bar
+                  yAxisId="right"
+                  dataKey="Tuyển mới"
+                  fill="#10b981"
+                  maxBarSize={28}
+                  radius={[6, 6, 0, 0]}
+                />
+              </ComposedChart>
+            </ResponsiveContainer>
           </div>
         </div>
 
@@ -324,89 +322,6 @@ export function DashboardPage() {
               <div className="text-lg font-extrabold text-slate-800">{hrData?.absentToday ?? 0}</div>
             </div>
           </div>
-        </div>
-      </div>
-
-      {/* Row 2: NEW Headcount Trend Chart (Tăng giảm nhân sự 6 tháng) */}
-      <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-xs">
-        <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <div className="flex items-center gap-2">
-              <TrendingUp className="h-5 w-5 text-blue-700" />
-              <h2 className="text-base font-bold text-slate-900">Biểu đồ biến động tăng / giảm nhân sự</h2>
-            </div>
-            <p className="mt-0.5 text-xs text-slate-500">
-              Theo dõi quy mô tổng nhân sự và số nhân sự gia nhập mới trong 6 tháng gần nhất
-            </p>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="rounded-full bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-700">
-              Quy mô hiện tại: {hrData?.totalActiveEmployees ?? 0} NV
-            </span>
-            <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">
-              Tháng này: +{hrData?.totalNewEmployeesThisMonth ?? 0} mới
-            </span>
-          </div>
-        </div>
-
-        <div className="h-72 w-full">
-          <ResponsiveContainer width="100%" height="100%">
-            <ComposedChart data={headcountTrend} margin={{ top: 10, right: 16, left: -12, bottom: 4 }}>
-              <defs>
-                <linearGradient id="headcountArea" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#2563eb" stopOpacity={0.25} />
-                  <stop offset="95%" stopColor="#2563eb" stopOpacity={0.02} />
-                </linearGradient>
-              </defs>
-              <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
-              <XAxis
-                dataKey="label"
-                axisLine={{ stroke: '#e2e8f0' }}
-                tickLine={false}
-                tick={{ fontSize: 12, fill: '#475569', fontWeight: 600 }}
-              />
-              <YAxis
-                yAxisId="left"
-                axisLine={false}
-                tickLine={false}
-                tick={{ fontSize: 11, fill: '#94a3b8' }}
-                allowDecimals={false}
-              />
-              <YAxis
-                yAxisId="right"
-                orientation="right"
-                axisLine={false}
-                tickLine={false}
-                tick={{ fontSize: 11, fill: '#10b981' }}
-                allowDecimals={false}
-              />
-              <Tooltip
-                contentStyle={{
-                  borderRadius: '12px',
-                  border: '1px solid #e2e8f0',
-                  boxShadow: '0 10px 25px -5px rgba(15, 23, 42, 0.1)',
-                  fontSize: '12px',
-                }}
-              />
-              <Legend wrapperStyle={{ fontSize: 12, paddingTop: 10 }} iconType="circle" />
-              <Area
-                yAxisId="left"
-                type="monotone"
-                dataKey="Tổng nhân sự"
-                stroke="#1d4ed8"
-                strokeWidth={2.5}
-                fill="url(#headcountArea)"
-                activeDot={{ r: 6, fill: '#1d4ed8', stroke: '#ffffff', strokeWidth: 2 }}
-              />
-              <Bar
-                yAxisId="right"
-                dataKey="Tuyển mới"
-                fill="#10b981"
-                maxBarSize={28}
-                radius={[6, 6, 0, 0]}
-              />
-            </ComposedChart>
-          </ResponsiveContainer>
         </div>
       </div>
 
