@@ -1,5 +1,15 @@
 import React, { useEffect, useState } from 'react';
-import { Search, Plus, Edit3, Trash2, RefreshCw, X } from 'lucide-react';
+import {
+  Search,
+  Plus,
+  Edit3,
+  Trash2,
+  RefreshCw,
+  X,
+  User,
+  Briefcase,
+  AlertCircle,
+} from 'lucide-react';
 import { apiClient, extractErrorMessage } from '../api/client';
 import {
   ApiResponse,
@@ -9,6 +19,10 @@ import {
   PositionDto,
 } from '../types/api';
 import { ConfirmModal } from '../components/ConfirmModal';
+
+interface EmployeeDetailResponse extends EmployeeSummaryDto {
+  notes?: string | null;
+}
 
 export function EmployeesPage() {
   const [items, setItems] = useState<EmployeeSummaryDto[]>([]);
@@ -22,14 +36,19 @@ export function EmployeesPage() {
   const [loading, setLoading] = useState(true);
   const [feedback, setFeedback] = useState<{ type: 'ok' | 'err'; msg: string } | null>(null);
 
+  // Modal state
   const [formModal, setFormModal] = useState(false);
   const [editing, setEditing] = useState<EmployeeSummaryDto | null>(null);
   const [formCode, setFormCode] = useState('');
   const [formName, setFormName] = useState('');
-  const [formEmail, setFormEmail] = useState('');
+  const [formBirthDate, setFormBirthDate] = useState('');
   const [formSex, setFormSex] = useState<boolean>(true);
+  const [formEmail, setFormEmail] = useState('');
   const [formDeptId, setFormDeptId] = useState('');
   const [formPosId, setFormPosId] = useState('');
+  const [formJoinDate, setFormJoinDate] = useState(new Date().toISOString().slice(0, 10));
+  const [formNotes, setFormNotes] = useState('');
+  const [formError, setFormError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
   const [deleteTarget, setDeleteTarget] = useState<EmployeeSummaryDto | null>(null);
@@ -80,58 +99,114 @@ export function EmployeesPage() {
 
   const openCreate = () => {
     setEditing(null);
+    setFormError(null);
     setFormCode('');
     setFormName('');
-    setFormEmail('');
+    setFormBirthDate('');
     setFormSex(true);
+    setFormEmail('');
     setFormDeptId(departments[0]?.id || '');
-    setFormPosId(positions[0]?.id || '');
+    setFormPosId(positions.find((p) => p.name.toLowerCase() === 'staff')?.id || positions[0]?.id || '');
+    setFormJoinDate(new Date().toISOString().slice(0, 10));
+    setFormNotes('');
     setFormModal(true);
   };
 
-  const openEdit = (emp: EmployeeSummaryDto) => {
+  const openEdit = async (emp: EmployeeSummaryDto) => {
     setEditing(emp);
-    setFormCode(emp.code);
-    setFormName(emp.fullName);
-    setFormEmail(emp.email || '');
+    setFormError(null);
+    setFormCode(emp.code || '');
+    setFormName(emp.fullName || '');
+    setFormBirthDate(emp.birthDate ? emp.birthDate.slice(0, 10) : '');
     setFormSex(emp.sex ?? true);
+    setFormEmail(emp.email || '');
     setFormDeptId(emp.departmentId || departments[0]?.id || '');
     setFormPosId(emp.positionId || positions[0]?.id || '');
+    setFormJoinDate(emp.currentDepartmentFromDate ? emp.currentDepartmentFromDate.slice(0, 10) : '');
+    setFormNotes('');
     setFormModal(true);
+
+    // Fetch full detail to prefill birthDate, notes, departmentId, positionId accurately
+    try {
+      const detailRes = await apiClient.get<ApiResponse<EmployeeDetailResponse>>(`/api/employees/${emp.id}`);
+      const d = detailRes.data.data;
+      if (d) {
+        setFormCode(d.code || emp.code);
+        setFormName(d.fullName || emp.fullName);
+        setFormBirthDate(d.birthDate ? d.birthDate.slice(0, 10) : '');
+        setFormSex(d.sex ?? true);
+        setFormEmail(d.email || '');
+        if (d.departmentId) setFormDeptId(d.departmentId);
+        if (d.positionId) setFormPosId(d.positionId);
+        if (d.currentDepartmentFromDate) setFormJoinDate(d.currentDepartmentFromDate.slice(0, 10));
+        setFormNotes(d.notes || '');
+      }
+    } catch {
+      // keep summary fallback
+    }
   };
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formName.trim() || (!editing && !formCode.trim())) {
-      setFeedback({ type: 'err', msg: 'Vui lòng nhập đầy đủ mã và họ tên nhân viên.' });
+    setFormError(null);
+
+    const codeTrim = formCode.trim();
+    const nameTrim = formName.trim();
+    const emailTrim = formEmail.trim();
+
+    if (!codeTrim) {
+      setFormError('Mã nhân viên không được để trống.');
       return;
     }
+    if (codeTrim.length > 15) {
+      setFormError('Mã nhân viên tối đa 15 ký tự.');
+      return;
+    }
+    if (!nameTrim) {
+      setFormError('Họ và tên không được để trống.');
+      return;
+    }
+    if (emailTrim && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailTrim)) {
+      setFormError('Email không đúng định dạng.');
+      return;
+    }
+    if (!formDeptId || !formPosId) {
+      setFormError('Vui lòng chọn đầy đủ Phòng ban và Chức vụ.');
+      return;
+    }
+
     setSaving(true);
     try {
       if (editing) {
         await apiClient.put(`/api/employees/${editing.id}`, {
-          fullName: formName.trim(),
-          email: formEmail.trim() || null,
+          code: codeTrim,
+          fullName: nameTrim,
+          birthDate: formBirthDate || null,
           sex: formSex,
-          departmentId: formDeptId || null,
-          positionId: formPosId || null,
-        });
-        setFeedback({ type: 'ok', msg: `Đã cập nhật hồ sơ nhân viên ${formName}.` });
-      } else {
-        await apiClient.post('/api/employees', {
-          code: formCode.trim(),
-          fullName: formName.trim(),
-          email: formEmail.trim() || null,
-          sex: formSex,
+          email: emailTrim || null,
+          notes: formNotes.trim() || null,
           departmentId: formDeptId,
           positionId: formPosId,
         });
-        setFeedback({ type: 'ok', msg: `Đã thêm mới nhân viên ${formName}.` });
+        setFeedback({ type: 'ok', msg: `Đã cập nhật hồ sơ nhân viên ${nameTrim} (${codeTrim}).` });
+      } else {
+        await apiClient.post('/api/employees', {
+          code: codeTrim,
+          fullName: nameTrim,
+          birthDate: formBirthDate || null,
+          sex: formSex,
+          email: emailTrim || null,
+          departmentId: formDeptId,
+          positionId: formPosId,
+          joinDate: formJoinDate || null,
+          notes: formNotes.trim() || null,
+        });
+        setFeedback({ type: 'ok', msg: `Đã thêm mới nhân viên ${nameTrim} (${codeTrim}).` });
       }
       setFormModal(false);
       loadEmployees(pageIndex);
     } catch (err) {
-      setFeedback({ type: 'err', msg: extractErrorMessage(err, 'Lưu thông tin nhân viên thất bại.') });
+      setFormError(extractErrorMessage(err, 'Lưu thông tin nhân viên thất bại.'));
     } finally {
       setSaving(false);
     }
@@ -307,111 +382,203 @@ export function EmployeesPage() {
         </div>
       </div>
 
-      {/* Create / Edit Modal */}
+      {/* Modern Create / Edit Employee Modal */}
       {formModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4 backdrop-blur-[2px]">
           <form
             onSubmit={handleSave}
-            className="w-full max-w-lg rounded-2xl border border-slate-200 bg-white p-6 shadow-xl"
+            className="flex max-h-[90vh] w-full max-w-2xl flex-col overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-2xl"
           >
-            <div className="mb-4 flex items-center justify-between">
-              <h3 className="text-lg font-bold text-slate-900">
-                {editing ? 'Cập nhật hồ sơ nhân viên' : 'Thêm nhân viên mới'}
-              </h3>
+            {/* Header */}
+            <div className="flex items-center justify-between border-b border-slate-100 px-6 py-4">
+              <div>
+                <h3 className="text-lg font-extrabold text-slate-900">
+                  {editing ? 'Cập nhật hồ sơ nhân viên' : 'Thêm hồ sơ nhân viên mới'}
+                </h3>
+                <p className="text-xs text-slate-500">
+                  {editing
+                    ? `Chỉnh sửa thông tin nhân sự #${editing.id} — thay đổi phòng ban/chức vụ sẽ tự lưu lịch sử`
+                    : 'Tạo nhân sự mới kèm phân bổ phòng ban & chức vụ khởi đầu'}
+                </p>
+              </div>
               <button
                 type="button"
                 onClick={() => setFormModal(false)}
-                className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100"
+                className="rounded-xl p-2 text-slate-400 transition hover:bg-slate-100 hover:text-slate-600"
               >
                 <X className="h-5 w-5" />
               </button>
             </div>
 
-            <div className="grid gap-4 sm:grid-cols-2">
+            {/* Body */}
+            <div className="space-y-5 overflow-y-auto px-6 py-5">
+              {formError && (
+                <div className="flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+                  <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+                  <span>{formError}</span>
+                </div>
+              )}
+
+              {/* Section 1: Personal Info */}
               <div>
-                <label className="mb-1 block text-xs font-semibold text-slate-700">Mã nhân viên *</label>
-                <input
-                  type="text"
-                  disabled={!!editing}
-                  value={formCode}
-                  onChange={(e) => setFormCode(e.target.value)}
-                  placeholder="NV00300"
-                  className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-blue-600 disabled:bg-slate-100"
-                />
+                <div className="mb-3 flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-blue-700">
+                  <User className="h-3.5 w-3.5" />
+                  Thông tin cá nhân
+                </div>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div>
+                    <label className="mb-1 block text-xs font-semibold text-slate-700">
+                      Mã nhân viên <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      maxLength={15}
+                      value={formCode}
+                      onChange={(e) => setFormCode(e.target.value)}
+                      placeholder="VD: NV00300"
+                      className="w-full rounded-xl border border-slate-300 bg-slate-50 px-3.5 py-2.5 text-sm outline-none transition focus:border-blue-600 focus:bg-white focus:ring-4 focus:ring-blue-600/10"
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-xs font-semibold text-slate-700">
+                      Họ và tên <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      maxLength={150}
+                      value={formName}
+                      onChange={(e) => setFormName(e.target.value)}
+                      placeholder="Nguyễn Văn Bình"
+                      className="w-full rounded-xl border border-slate-300 bg-slate-50 px-3.5 py-2.5 text-sm outline-none transition focus:border-blue-600 focus:bg-white focus:ring-4 focus:ring-blue-600/10"
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-xs font-semibold text-slate-700">Ngày sinh</label>
+                    <input
+                      type="date"
+                      value={formBirthDate}
+                      onChange={(e) => setFormBirthDate(e.target.value)}
+                      className="w-full rounded-xl border border-slate-300 bg-slate-50 px-3.5 py-2.5 text-sm outline-none transition focus:border-blue-600 focus:bg-white"
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-xs font-semibold text-slate-700">Giới tính</label>
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setFormSex(true)}
+                        className={`rounded-xl border py-2.5 text-sm font-semibold transition ${
+                          formSex
+                            ? 'border-blue-600 bg-blue-50 text-blue-700'
+                            : 'border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100'
+                        }`}
+                      >
+                        Nam
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setFormSex(false)}
+                        className={`rounded-xl border py-2.5 text-sm font-semibold transition ${
+                          !formSex
+                            ? 'border-blue-600 bg-blue-50 text-blue-700'
+                            : 'border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100'
+                        }`}
+                      >
+                        Nữ
+                      </button>
+                    </div>
+                  </div>
+                  <div className="sm:col-span-2">
+                    <label className="mb-1 block text-xs font-semibold text-slate-700">Email liên lạc</label>
+                    <input
+                      type="email"
+                      maxLength={100}
+                      value={formEmail}
+                      onChange={(e) => setFormEmail(e.target.value)}
+                      placeholder="binh.nguyen@company.com"
+                      className="w-full rounded-xl border border-slate-300 bg-slate-50 px-3.5 py-2.5 text-sm outline-none transition focus:border-blue-600 focus:bg-white focus:ring-4 focus:ring-blue-600/10"
+                    />
+                  </div>
+                </div>
               </div>
-              <div>
-                <label className="mb-1 block text-xs font-semibold text-slate-700">Họ và tên *</label>
-                <input
-                  type="text"
-                  value={formName}
-                  onChange={(e) => setFormName(e.target.value)}
-                  placeholder="Nguyễn Văn A"
-                  className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-blue-600"
-                />
-              </div>
-              <div>
-                <label className="mb-1 block text-xs font-semibold text-slate-700">Email</label>
-                <input
-                  type="email"
-                  value={formEmail}
-                  onChange={(e) => setFormEmail(e.target.value)}
-                  placeholder="email@company.com"
-                  className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-blue-600"
-                />
-              </div>
-              <div>
-                <label className="mb-1 block text-xs font-semibold text-slate-700">Giới tính</label>
-                <select
-                  value={formSex ? '1' : '0'}
-                  onChange={(e) => setFormSex(e.target.value === '1')}
-                  className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-blue-600"
-                >
-                  <option value="1">Nam</option>
-                  <option value="0">Nữ</option>
-                </select>
-              </div>
-              <div>
-                <label className="mb-1 block text-xs font-semibold text-slate-700">Phòng ban *</label>
-                <select
-                  value={formDeptId}
-                  onChange={(e) => setFormDeptId(e.target.value)}
-                  className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-blue-600"
-                >
-                  {departments.map((d) => (
-                    <option key={d.id} value={d.id}>
-                      {d.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="mb-1 block text-xs font-semibold text-slate-700">Chức vụ *</label>
-                <select
-                  value={formPosId}
-                  onChange={(e) => setFormPosId(e.target.value)}
-                  className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-blue-600"
-                >
-                  {positions.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.name}
-                    </option>
-                  ))}
-                </select>
+
+              {/* Section 2: Org Assignment */}
+              <div className="border-t border-slate-100 pt-4">
+                <div className="mb-3 flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-blue-700">
+                  <Briefcase className="h-3.5 w-3.5" />
+                  Tổ chức &amp; Công việc
+                </div>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div>
+                    <label className="mb-1 block text-xs font-semibold text-slate-700">
+                      Phòng ban <span className="text-red-500">*</span>
+                    </label>
+                    <select
+                      value={formDeptId}
+                      onChange={(e) => setFormDeptId(e.target.value)}
+                      className="w-full rounded-xl border border-slate-300 bg-slate-50 px-3.5 py-2.5 text-sm outline-none focus:border-blue-600 focus:bg-white"
+                    >
+                      {departments.map((d) => (
+                        <option key={d.id} value={d.id}>
+                          {d.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-xs font-semibold text-slate-700">
+                      Chức vụ <span className="text-red-500">*</span>
+                    </label>
+                    <select
+                      value={formPosId}
+                      onChange={(e) => setFormPosId(e.target.value)}
+                      className="w-full rounded-xl border border-slate-300 bg-slate-50 px-3.5 py-2.5 text-sm outline-none focus:border-blue-600 focus:bg-white"
+                    >
+                      {positions.map((p) => (
+                        <option key={p.id} value={p.id}>
+                          {p.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  {!editing && (
+                    <div>
+                      <label className="mb-1 block text-xs font-semibold text-slate-700">Ngày vào làm</label>
+                      <input
+                        type="date"
+                        value={formJoinDate}
+                        onChange={(e) => setFormJoinDate(e.target.value)}
+                        className="w-full rounded-xl border border-slate-300 bg-slate-50 px-3.5 py-2.5 text-sm outline-none focus:border-blue-600 focus:bg-white"
+                      />
+                    </div>
+                  )}
+                  <div className={editing ? 'sm:col-span-2' : ''}>
+                    <label className="mb-1 block text-xs font-semibold text-slate-700">Ghi chú hồ sơ</label>
+                    <input
+                      type="text"
+                      value={formNotes}
+                      onChange={(e) => setFormNotes(e.target.value)}
+                      placeholder="Ghi chú thêm (tùy chọn)"
+                      className="w-full rounded-xl border border-slate-300 bg-slate-50 px-3.5 py-2.5 text-sm outline-none focus:border-blue-600 focus:bg-white"
+                    />
+                  </div>
+                </div>
               </div>
             </div>
 
-            <div className="mt-6 flex justify-end gap-2.5">
+            {/* Footer */}
+            <div className="flex items-center justify-end gap-2.5 border-t border-slate-100 bg-slate-50/70 px-6 py-4">
               <button
                 type="button"
                 onClick={() => setFormModal(false)}
-                className="rounded-xl border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                className="rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
               >
                 Hủy
               </button>
               <button
                 type="submit"
                 disabled={saving}
-                className="rounded-xl bg-blue-700 px-5 py-2 text-sm font-semibold text-white hover:bg-blue-800 disabled:opacity-50"
+                className="rounded-xl bg-blue-700 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-800 disabled:opacity-50"
               >
                 {saving ? 'Đang lưu...' : editing ? 'Lưu thay đổi' : 'Thêm nhân viên'}
               </button>
