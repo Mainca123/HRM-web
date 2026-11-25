@@ -86,17 +86,20 @@ export function UsersPage() {
     }
   };
 
+  const getUsername = (u?: UserSummaryDto | null) => u?.userName || u?.username || '';
+
   const handleUpdate = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editUser) return;
+    const uname = getUsername(editUser);
     setSaving(true);
     try {
-      await apiClient.put(`/api/users/${encodeURIComponent(editUser.username)}`, {
+      await apiClient.put(`/api/users/${encodeURIComponent(uname)}`, {
         groupId: editGroupId,
         permission: editPermission,
         employeeId: editUser.employeeId ?? null,
       });
-      setFeedback({ type: 'ok', msg: `Đã cập nhật phân quyền cho ${editUser.username}.` });
+      setFeedback({ type: 'ok', msg: `Đã cập nhật phân quyền cho ${uname}.` });
       setEditUser(null);
       loadData();
     } catch (err) {
@@ -108,12 +111,13 @@ export function UsersPage() {
 
   const handleResetPassword = async () => {
     if (!resetTarget) return;
+    const uname = getUsername(resetTarget);
     setSaving(true);
     try {
-      await apiClient.post(`/api/users/${encodeURIComponent(resetTarget.username)}/reset-password`, {
+      await apiClient.post(`/api/users/${encodeURIComponent(uname)}/reset-password`, {
         newPassword: resetPass.trim() || '123456',
       });
-      setFeedback({ type: 'ok', msg: `Đã đặt lại mật khẩu cho ${resetTarget.username}.` });
+      setFeedback({ type: 'ok', msg: `Đã đặt lại mật khẩu cho ${uname}.` });
       setResetTarget(null);
       setResetPass('123456');
     } catch (err) {
@@ -125,10 +129,11 @@ export function UsersPage() {
 
   const handleDelete = async () => {
     if (!deleteTarget) return;
+    const uname = getUsername(deleteTarget);
     setSaving(true);
     try {
-      await apiClient.delete(`/api/users/${encodeURIComponent(deleteTarget.username)}`);
-      setFeedback({ type: 'ok', msg: `Đã xóa tài khoản ${deleteTarget.username}.` });
+      await apiClient.delete(`/api/users/${encodeURIComponent(uname)}`);
+      setFeedback({ type: 'ok', msg: `Đã xóa tài khoản ${uname}.` });
       setDeleteTarget(null);
       loadData();
     } catch (err) {
@@ -209,9 +214,11 @@ export function UsersPage() {
                   </td>
                 </tr>
               ) : (
-                users.map((u) => (
-                  <tr key={u.username} className="hover:bg-slate-50/70">
-                    <td className="px-4 py-3 font-bold text-slate-900">{u.username}</td>
+                users.map((u, idx) => {
+                  const uname = getUsername(u);
+                  return (
+                  <tr key={uname || idx} className="hover:bg-slate-50/70">
+                    <td className="px-4 py-3 font-bold text-slate-900">{uname || '—'}</td>
                     <td className="px-4 py-3 text-slate-700">
                       {u.employeeFullName ? (
                         <span>
@@ -269,7 +276,8 @@ export function UsersPage() {
                       </div>
                     </td>
                   </tr>
-                ))
+                  );
+                })
               )}
             </tbody>
           </table>
@@ -393,7 +401,7 @@ export function UsersPage() {
       {editUser && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4">
           <form onSubmit={handleUpdate} className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
-            <h3 className="text-lg font-bold text-slate-900">Phân quyền: {editUser.username}</h3>
+            <h3 className="text-lg font-bold text-slate-900">Phân quyền: {getUsername(editUser)}</h3>
             <div className="mt-4 space-y-3">
               <div>
                 <label className="mb-1 block text-xs font-semibold text-slate-700">Nhóm quyền</label>
@@ -441,7 +449,7 @@ export function UsersPage() {
       <ConfirmModal
         open={!!resetTarget}
         title="Đặt lại mật khẩu"
-        message={`Nhập mật khẩu mới cho tài khoản ${resetTarget?.username}:`}
+        message={`Nhập mật khẩu mới cho tài khoản ${getUsername(resetTarget)}:`}
         confirmText="Đặt lại"
         loading={saving}
         onClose={() => setResetTarget(null)}
@@ -459,7 +467,7 @@ export function UsersPage() {
       <ConfirmModal
         open={!!deleteTarget}
         title="Xác nhận xóa tài khoản"
-        message={`Bạn có chắc chắn muốn xóa tài khoản "${deleteTarget?.username}"?`}
+        message={`Bạn có chắc chắn muốn xóa tài khoản "${getUsername(deleteTarget)}"?`}
         confirmText="Xóa"
         tone="danger"
         loading={saving}

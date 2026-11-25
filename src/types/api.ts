@@ -97,7 +97,8 @@ export interface UserGroupDto {
 }
 
 export interface UserSummaryDto {
-  username: string;
+  userName?: string;
+  username?: string;
   groupId?: string | null;
   groupName?: string | null;
   permission?: boolean;
