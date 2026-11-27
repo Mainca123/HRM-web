@@ -1,9 +1,21 @@
 import axios from 'axios';
 
-const BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
+function normalizeBaseUrl(url?: string): string {
+  if (!url) return '';
+  return url.trim().replace(/\/+$/, '').replace(/\/api$/i, '');
+}
+
+// Thứ tự ưu tiên:
+// 1. Runtime config (public/config.js -> dist/config.js) - đổi được không cần build lại
+// 2. Biến môi trường Vite (.env -> VITE_API_BASE_URL)
+// 3. Chuỗi rỗng '' - dùng đường dẫn tương đối /api qua proxy (Vite dev / Nginx Docker)
+export const API_BASE_URL =
+  normalizeBaseUrl(window.__APP_CONFIG__?.API_BASE_URL) ||
+  normalizeBaseUrl(import.meta.env.VITE_API_BASE_URL) ||
+  '';
 
 export const apiClient = axios.create({
-  baseURL: BASE_URL,
+  baseURL: API_BASE_URL,
   headers: {
     'Content-Type': 'application/json',
     Accept: 'application/json',

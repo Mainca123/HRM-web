@@ -11,6 +11,27 @@ Cổng quản trị hệ thống Nhân sự & Chấm công (HRM Admin Portal) x�
 - Phê duyệt tập trung Nghỉ phép, Tăng ca (OT) và Giải trình đi muộn/về sớm.
 - Báo cáo tổng hợp & xuất file CSV/Excel chuẩn UTF-8.
 
+## Cấu hình API Base URL
+
+Ứng dụng hỗ trợ thay đổi Base URL của Backend API linh hoạt theo 3 cách (ưu tiên từ trên xuống dưới):
+
+1. **Runtime sau khi build (không cần build lại)** — sửa file `public/config.js` (hoặc `dist/config.js` sau khi build):
+   ```js
+   window.__APP_CONFIG__ = {
+     API_BASE_URL: 'https://your-api-domain.com',
+   };
+   ```
+2. **Biến môi trường `.env` (khi chạy local / build)** — sao chép `.env.example` thành `.env` và sửa:
+   ```env
+   VITE_API_BASE_URL=https://hrm-tmyj.onrender.com
+   VITE_API_PROXY_TARGET=https://hrm-tmyj.onrender.com
+   ```
+   *(Nếu để `VITE_API_BASE_URL` trống, ứng dụng gọi qua `/api` và đi qua proxy của Vite khi dev hoặc Nginx khi chạy Docker.)*
+3. **Docker runtime** — truyền biến môi trường `API_BASE_URL` khi chạy container (không cần build lại image):
+   ```bash
+   docker run -p 8080:80 -e API_BASE_URL=https://your-api-domain.com hrm-web
+   ```
+
 ## Chạy local
 ```bash
 npm install
@@ -20,5 +41,5 @@ npm run dev
 ## Chạy bằng Docker
 ```bash
 docker build -t hrm-web .
-docker run -p 8080:80 hrm-web
+docker run -p 8080:80 -e API_BASE_URL=https://hrm-tmyj.onrender.com hrm-web
 ```
